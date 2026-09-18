@@ -1,0 +1,15 @@
+# Live Shopify storefronts - the population of the UCP survey.
+#
+# Ranking:   Tranco list V3YPN (https://tranco-list.eu/list/V3YPN), top 2000.
+# Selection: DNS A record inside 23.227.38.0/24, the address Shopify
+#            documents for merchant-owned domains, or a CNAME to
+#            *.myshopify.com. Discovery asked a resolver, never the shop.
+# Collected: 2026-09-18 by survey/collect.mjs.
+# Result:    2 storefront(s) out of 2000 ranked domain(s);
+#            348 domain(s) could not be resolved either way.
+# Order:     by Tranco rank, most visited first.
+#
+# These are shop names, not a verdict about any of them. The survey
+# publishes totals only.
+shopify.com
+myshopify.com
