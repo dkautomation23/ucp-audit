@@ -12,7 +12,7 @@ npx ucp-audit yourshop.com
 ```
 
 No runtime dependencies, no API key, no account. TypeScript, Node's own test
-runner, 43 tests.
+runner, 50 tests.
 
 ## Why
 
@@ -202,6 +202,7 @@ Node 22+.
 | --- | --- |
 | `--batch FILE` | audit a list of domains, one per line; `#` comments and blanks ignored |
 | `--csv FILE` | write the batch result as CSV, one row per domain |
+| `--offline` | do not ask ucp.dev which release is current; use the built-in one |
 | `--probe` | also check that every URL the profile declares resolves |
 | `--file PATH` | audit a saved profile instead of fetching one |
 | `--json FILE` | write the findings as JSON |
@@ -257,9 +258,10 @@ The full write-up, with the method and what it does not say, is at
 - **A clean result is not a guarantee of sales.** It means an agent can see and
   use what you declared. Whether it chooses your product is a different question
   with a different answer.
-- **The published version is a build-time constant** (`--spec-version` overrides
-  it). UCP ships dated releases; a stale copy of this tool will under-report how
-  far behind you are, never over-report.
+- **The published version is read from ucp.dev, with the build-time constant as
+  the fallback.** `--spec-version` overrides both and `--offline` skips the
+  lookup. When the site cannot be reached the audit still runs, against the
+  version this build knows, which can only under-report how far behind you are.
 - **Only the shopping vertical is understood in detail.** The protocol reserves
   namespaces for other verticals whose specifications are still being written;
   those are read but not judged.

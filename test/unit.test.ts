@@ -9,6 +9,7 @@ import { checkProfile, countByLevel, worstLevel, type Finding } from "../src/che
 import { isPublicUrl, probeUrls, type Fetcher } from "../src/probe.js";
 import { renderConsole, renderJson } from "../src/report.js";
 import { run } from "../src/cli.js";
+import { currentSpecVersion, KNOWN_SPEC_VERSION, VERSIONS_URL } from "../src/spec.js";
 import {
   auditDomain,
   auditMany,
@@ -540,5 +541,94 @@ describe("auditing a list of shops", () => {
     const fetcher = catalogue({ "rude.example": { status: 403 }, "busy.example": { status: 429 } });
     const code = await run(["--batch", list, "--quiet"], fetcher, () => {});
     assert.equal(code, 2, "a run that verified nothing must not look like a clean run");
+  });
+});
+
+
+describe("which release to judge a profile against", () => {
+  /** A fetcher that answers the versions URL and nothing else. */
+  function versionsSite(answer: { status: number; body: string }): Fetcher {
+    return {
+      async get(url) {
+        if (url !== VERSIONS_URL) throw new Error(`unexpected url ${url}`);
+        return { status: answer.status, contentType: "application/json", body: answer.body };
+      },
+      async head() {
+        return 200;
+      },
+    };
+  }
+
+  const LIVE = JSON.stringify([
+    { version: "draft", title: "draft", aliases: [] },
+    { version: "2099-01-01", title: "2099-01-01", aliases: ["latest"] },
+    { version: "2026-08-25", title: "2026-08-25", aliases: [] },
+  ]);
+
+  it("takes the release the site calls latest", async () => {
+    const spec = await currentSpecVersion(versionsSite({ status: 200, body: LIVE }));
+    assert.deepEqual(spec, { version: "2099-01-01", source: "network" });
+  });
+
+  it("falls back to the newest date when no alias says latest", async () => {
+    const body = JSON.stringify([
+      { version: "draft", aliases: [] },
+      { version: "2099-02-02" },
+      { version: "2099-01-01" },
+    ]);
+    const spec = await currentSpecVersion(versionsSite({ status: 200, body }));
+    assert.equal(spec.version, "2099-02-02");
+  });
+
+  it("uses the built-in version when the site cannot be reached", async () => {
+    const offline: Fetcher = {
+      async get() {
+        throw new Error("getaddrinfo ENOTFOUND ucp.dev");
+      },
+      async head() {
+        return 200;
+      },
+    };
+    const spec = await currentSpecVersion(offline);
+    assert.deepEqual(spec, { version: KNOWN_SPEC_VERSION, source: "built-in" },
+      "a version lookup that cannot answer must not stop an audit");
+  });
+
+  it("uses the built-in version when the site answers with nonsense", async () => {
+    for (const body of ["<html>maintenance</html>", "{}", "[]", '[{"version":"latest"}]']) {
+      const spec = await currentSpecVersion(versionsSite({ status: 200, body }));
+      assert.equal(spec.version, KNOWN_SPEC_VERSION, `body was ${body}`);
+      assert.equal(spec.source, "built-in");
+    }
+  });
+
+  it("uses the built-in version when the site says no", async () => {
+    const spec = await currentSpecVersion(versionsSite({ status: 503, body: "" }));
+    assert.deepEqual(spec, { version: KNOWN_SPEC_VERSION, source: "built-in" });
+  });
+
+  it("never goes backwards from what this build already knows", async () => {
+    const body = JSON.stringify([{ version: "2026-01-23", aliases: ["latest"] }]);
+    const spec = await currentSpecVersion(versionsSite({ status: 200, body }));
+    assert.deepEqual(spec, { version: KNOWN_SPEC_VERSION, source: "built-in" },
+      "an older answer must not drag the tool back");
+  });
+
+  it("a switch before the shop name does not swallow it", async () => {
+    const fetcher: Fetcher = {
+      async get(url) {
+        assert.match(url, /allbirds\.com/, "the shop name must survive the flag before it");
+        return { status: 200, contentType: "application/json", body: JSON.stringify(fixture("allbirds")) };
+      },
+      async head() {
+        return 200;
+      },
+    };
+    let printed = "";
+    const code = await run(["--offline", "--quiet", "allbirds.com"], fetcher, (text) => {
+      printed += text;
+    });
+    assert.equal(code, 0);
+    assert.doesNotMatch(printed, /check whether a shop/, "printing usage means the name was eaten");
   });
 });

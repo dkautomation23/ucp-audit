@@ -9,9 +9,9 @@ import { parseProfile, profileUrl, urlsIn, type Profile } from "./profile.js";
 import { fetchProfile, httpFetcher, probeUrls, type Fetcher, type UrlResult } from "./probe.js";
 import { renderConsole, renderJson, type Context } from "./report.js";
 import { auditMany, parseDomainList, renderSummary, summarise, toCsv } from "./batch.js";
+import { currentSpecVersion, KNOWN_SPEC_VERSION } from "./spec.js";
 
-/** The newest published UCP release this build knows about. */
-export const KNOWN_SPEC_VERSION = "2026-08-25";
+export { KNOWN_SPEC_VERSION };
 
 const USAGE = `ucp-audit - check whether a shop is actually reachable by shopping agents.
 
@@ -29,7 +29,8 @@ because nothing anywhere reports it.
   --probe           also check that every URL the profile declares resolves
   --file PATH       audit a saved profile instead of fetching one
   --json FILE       write the findings as JSON
-  --spec-version V  compare against this published version (default ${KNOWN_SPEC_VERSION})
+  --spec-version V  compare against this version instead of asking ucp.dev
+  --offline         do not ask ucp.dev; use the built-in ${KNOWN_SPEC_VERSION}
   --timeout MS      per request, default 15000
   --quiet           write files, print nothing
 
@@ -41,6 +42,14 @@ interface Args {
   flags: Map<string, string>;
   bools: Set<string>;
 }
+
+/**
+ * Flags that take no value.
+ *
+ * Without this list, `ucp-audit --probe yourshop.com` reads the shop name as
+ * the value of --probe and then complains that no shop was named.
+ */
+const SWITCHES = new Set(["probe", "quiet", "help", "offline"]);
 
 function parse(argv: string[]): Args {
   const flags = new Map<string, string>();
@@ -55,7 +64,8 @@ function parse(argv: string[]): Args {
     }
     const name = token.slice(2);
     const next = argv[i + 1];
-    if (next === undefined || next.startsWith("--")) bools.add(name);
+    if (SWITCHES.has(name)) bools.add(name);
+    else if (next === undefined || next.startsWith("--")) bools.add(name);
     else {
       flags.set(name, next);
       i += 1;
@@ -78,7 +88,16 @@ export async function run(
     return args.target || file || batch ? 0 : 2;
   }
 
-  const specVersion = args.flags.get("spec-version") ?? KNOWN_SPEC_VERSION;
+  // The published release is read from the specification site, because a
+  // version baked into a build starts lying the day the spec moves. Asking is
+  // one request and never fatal: no answer means the built-in constant.
+  const given = args.flags.get("spec-version");
+  const spec = given
+    ? { version: given, source: "given" as const }
+    : args.bools.has("offline")
+      ? { version: KNOWN_SPEC_VERSION, source: "built-in" as const }
+      : await currentSpecVersion(fetcher ?? httpFetcher(Number(args.flags.get("timeout") ?? 15_000)));
+  const specVersion = spec.version;
   const timeout = Number(args.flags.get("timeout") ?? 15_000);
   const http = fetcher ?? httpFetcher(timeout);
   const quiet = args.bools.has("quiet");
@@ -91,7 +110,10 @@ export async function run(
       return 2;
     }
 
-    if (!quiet) out(`auditing ${domains.length} domain(s), 4 at a time\n\n`);
+    if (!quiet) {
+      out(`auditing ${domains.length} domain(s), 4 at a time`);
+      out(spec.source === "network" ? ` against ${specVersion}, read from ucp.dev\n\n` : ` against ${specVersion}\n\n`);
+    }
     const results = await auditMany(http, domains, {
       specVersion,
       onResult: (result, done, total) => {
