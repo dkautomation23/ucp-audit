@@ -12,7 +12,7 @@ npx ucp-audit yourshop.com
 ```
 
 No runtime dependencies, no API key, no account. TypeScript, Node's own test
-runner, 50 tests.
+runner, 53 tests.
 
 ## Why
 
