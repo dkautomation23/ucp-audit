@@ -2,6 +2,26 @@
   "name": "ucp-audit",
   "version": "0.1.0",
   "description": "Checks whether a shop is actually reachable by AI shopping agents: reads the Universal Commerce Protocol profile at /.well-known/ucp and reports what would make an agent skip it.",
+  "keywords": [
+    "ucp",
+    "universal-commerce-protocol",
+    "agentic-commerce",
+    "shopify",
+    "ecommerce",
+    "ai-agents",
+    "audit",
+    "cli"
+  ],
+  "homepage": "https://dkautomation23.github.io/ucp-survey.html",
+  "bugs": {
+    "url": "https://github.com/dkautomation23/ucp-audit/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dkautomation23/ucp-audit.git"
+  },
+  "license": "MIT",
+  "author": "Dmytro Galko",
   "type": "module",
   "bin": {
     "ucp-audit": "dist/src/main.js"
@@ -18,23 +38,11 @@
   "scripts": {
     "build": "tsc",
     "test": "npm run build && node --test \"dist/test/**/*.test.js\"",
-    "start": "node dist/src/main.js"
+    "start": "node dist/src/main.js",
+    "prepublishOnly": "npm test"
   },
-  "keywords": [
-    "ucp",
-    "universal-commerce-protocol",
-    "agentic-commerce",
-    "shopify",
-    "ecommerce",
-    "ai-agents",
-    "audit",
-    "cli"
-  ],
-  "license": "MIT",
-  "author": "Dmytro Galko",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/dkautomation23/ucp-audit.git"
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

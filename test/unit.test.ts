@@ -632,3 +632,23 @@ describe("which release to judge a profile against", () => {
     assert.doesNotMatch(printed, /check whether a shop/, "printing usage means the name was eaten");
   });
 });
+
+describe("the first thing a stranger types", () => {
+  const silent = () => {};
+
+  for (const flag of ["--help", "-h"]) {
+    it(`answers \`${flag}\` with the usage text and exit 0`, async () => {
+      let printed = "";
+      const code = await run([flag], undefined, (text) => {
+        printed += text;
+      });
+      assert.equal(code, 0, "asking for help is not a mistake");
+      assert.match(printed, /ucp-audit - /);
+    });
+  }
+
+  it("exits 2 when nothing at all was named", async () => {
+    const code = await run([], undefined, silent);
+    assert.equal(code, 2, "an empty invocation is a usage error, not help");
+  });
+});

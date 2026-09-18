@@ -58,6 +58,11 @@ function parse(argv: string[]): Args {
 
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i]!;
+    // -h is what people try when --help is too much typing.
+    if (token === "-h") {
+      bools.add("help");
+      continue;
+    }
     if (!token.startsWith("--")) {
       target ??= token;
       continue;
@@ -83,9 +88,15 @@ export async function run(
   const file = args.flags.get("file");
   const batch = args.flags.get("batch");
 
-  if ((!args.target && !file && !batch) || args.bools.has("help")) {
+  // Asking for help is not a mistake; naming nothing to audit is.
+  const askedForHelp = args.bools.has("help");
+  if (!args.target && !file && !batch) {
     out(USAGE);
-    return args.target || file || batch ? 0 : 2;
+    return askedForHelp ? 0 : 2;
+  }
+  if (askedForHelp) {
+    out(USAGE);
+    return 0;
   }
 
   // The published release is read from the specification site, because a
