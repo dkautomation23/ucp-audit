@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="872" height="630" viewBox="0 0 872 630" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5">
+  <rect width="872" height="630" rx="8" fill="#0d1117" stroke="#30363d"/>
+  <rect width="872" height="34" rx="8" fill="#161b22"/>
+  <rect y="26" width="872" height="8" fill="#161b22"/>
+  <line x1="0" y1="34" x2="872" y2="34" stroke="#30363d"/>
+  <circle cx="18" cy="17" r="5" fill="#ff5f56"/>
+  <circle cx="36" cy="17" r="5" fill="#ffbd2e"/>
+  <circle cx="54" cy="17" r="5" fill="#27c93f"/>
+  <text x="436" y="22" fill="#8b949e" text-anchor="middle" font-size="12">ucp-audit — chewy.com</text>
+  <text x="20" y="52" fill="#2dd4bf" xml:space="preserve">$ ucp-audit chewy.com</text>
+  <text x="20" y="92" fill="#8b949e" xml:space="preserve">------------------------------------------------------------------------</text>
+  <text x="20" y="112" fill="#c9d1d9" xml:space="preserve">UCP AUDIT - chewy.com</text>
+  <text x="20" y="132" fill="#8b949e" xml:space="preserve">------------------------------------------------------------------------</text>
+  <text x="20" y="152" fill="#c9d1d9" xml:space="preserve">profile   https://chewy.com/.well-known/ucp  (3217 bytes)</text>
+  <text x="20" y="172" fill="#c9d1d9" xml:space="preserve">protocol  2026-01-23   published spec: 2026-08-25</text>
+  <text x="20" y="192" fill="#c9d1d9" xml:space="preserve">services  dev.ucp.shopping [rest]</text>
+  <text x="20" y="212" fill="#c9d1d9" xml:space="preserve">caps      3: dev.ucp.shopping.checkout, dev.ucp.shopping.fulfillment, dev.ucp.shopping.order</text>
+  <text x="20" y="252" fill="#f85149" xml:space="preserve">  BLOCK  Checkout is offered, but the catalogue cannot be searched or looked up</text>
+  <text x="20" y="272" fill="#c9d1d9" xml:space="preserve">         An agent can pay for something it already knows about, and cannot discover anything.</text>
+  <text x="20" y="292" fill="#c9d1d9" xml:space="preserve">           Neither dev.ucp.shopping.catalog.search nor dev.ucp.shopping.catalog.lookup is declared.</text>
+  <text x="20" y="312" fill="#c9d1d9" xml:space="preserve">         -&gt; Declare the catalogue capabilities so agents can find your products at all.</text>
+  <text x="20" y="352" fill="#d29922" xml:space="preserve">  warn   Protocol version 2026-01-23 is behind the published 2026-08-25</text>
+  <text x="20" y="372" fill="#c9d1d9" xml:space="preserve">         Capabilities added after your version do not exist as far as an agent is concerned, and</text>
+  <text x="20" y="392" fill="#c9d1d9" xml:space="preserve">           each release has added shopping capabilities.</text>
+  <text x="20" y="412" fill="#c9d1d9" xml:space="preserve">         -&gt; Plan the upgrade, or confirm with your platform which version it publishes for you.</text>
+  <text x="20" y="452" fill="#d29922" xml:space="preserve">  warn   Checkout without a cart capability</text>
+  <text x="20" y="472" fill="#c9d1d9" xml:space="preserve">         Multi-item purchases and cart-level discounts have nowhere to happen.</text>
+  <text x="20" y="512" fill="#c9d1d9" xml:space="preserve">  note   dev.ucp.shopping is served from www.chewy.com, not chewy.com</text>
+  <text x="20" y="532" fill="#c9d1d9" xml:space="preserve">         Normal when a platform hosts the protocol for you. Worth knowing, because that host's</text>
+  <text x="20" y="552" fill="#c9d1d9" xml:space="preserve">           availability is now part of your storefront.</text>
+  <text x="20" y="592" fill="#c9d1d9" xml:space="preserve">1 blocker(s), 2 warning(s), 1 note(s)</text>
+</svg>

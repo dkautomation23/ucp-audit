@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/dkautomation23/ucp-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/dkautomation23/ucp-audit/actions/workflows/ci.yml)
 
+<img src="docs/demo.svg" alt="ucp-audit reporting on a live shop that agents cannot browse" width="100%">
+
 Checks whether your shop is actually reachable by AI shopping agents — and tells
 you what would make one skip it.
 
