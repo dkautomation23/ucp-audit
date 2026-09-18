@@ -8,6 +8,7 @@ import { checkProfile, countByLevel, type Finding } from "./checks.js";
 import { parseProfile, profileUrl, urlsIn, type Profile } from "./profile.js";
 import { fetchProfile, httpFetcher, probeUrls, type Fetcher, type UrlResult } from "./probe.js";
 import { renderConsole, renderJson, type Context } from "./report.js";
+import { auditMany, parseDomainList, renderSummary, summarise, toCsv } from "./batch.js";
 
 /** The newest published UCP release this build knows about. */
 export const KNOWN_SPEC_VERSION = "2026-08-25";
@@ -16,12 +17,15 @@ const USAGE = `ucp-audit - check whether a shop is actually reachable by shoppin
 
   ucp-audit allbirds.com
   ucp-audit yourshop.com --probe --json report.json
+  ucp-audit --batch shops.txt --csv survey.csv
   ucp-audit --file saved-profile.json
 
 Reads the Universal Commerce Protocol profile a business publishes at
 /.well-known/ucp and reports what would make an agent skip the shop - silently,
 because nothing anywhere reports it.
 
+  --batch FILE      audit a list of domains, one per line, and print the totals
+  --csv FILE        write the batch result as CSV, one row per domain
   --probe           also check that every URL the profile declares resolves
   --file PATH       audit a saved profile instead of fetching one
   --json FILE       write the findings as JSON
@@ -67,16 +71,57 @@ export async function run(
 ): Promise<number> {
   const args = parse(argv);
   const file = args.flags.get("file");
+  const batch = args.flags.get("batch");
 
-  if ((!args.target && !file) || args.bools.has("help")) {
+  if ((!args.target && !file && !batch) || args.bools.has("help")) {
     out(USAGE);
-    return args.target || file ? 0 : 2;
+    return args.target || file || batch ? 0 : 2;
   }
 
   const specVersion = args.flags.get("spec-version") ?? KNOWN_SPEC_VERSION;
   const timeout = Number(args.flags.get("timeout") ?? 15_000);
   const http = fetcher ?? httpFetcher(timeout);
   const quiet = args.bools.has("quiet");
+
+  const batchPath = args.flags.get("batch");
+  if (batchPath) {
+    const domains = parseDomainList(readFileSync(batchPath, "utf8"));
+    if (domains.length === 0) {
+      out(`${batchPath}: no domains found\n`);
+      return 2;
+    }
+
+    if (!quiet) out(`auditing ${domains.length} domain(s), 4 at a time\n\n`);
+    const results = await auditMany(http, domains, {
+      specVersion,
+      onResult: (result, done, total) => {
+        if (quiet) return;
+        const detail =
+          result.outcome === "checked"
+            ? `${result.capabilities?.length} cap(s), ${result.blockers} blocker(s)${result.catalogueSearchable ? "" : ", catalogue not searchable"}`
+            : result.outcome;
+        out(`  ${String(done).padStart(4)}/${total}  ${result.domain.padEnd(34)} ${detail}\n`);
+      },
+    });
+
+    const totals = summarise(results, specVersion);
+    if (!quiet) out(`\n${renderSummary(totals, specVersion)}\n`);
+
+    const csvPath = args.flags.get("csv");
+    if (csvPath) {
+      writeFileSync(csvPath, toCsv(results), "utf8");
+      if (!quiet) out(`\nrows written to ${csvPath}\n`);
+    }
+    const jsonPath = args.flags.get("json");
+    if (jsonPath) {
+      writeFileSync(jsonPath, `${JSON.stringify({ specVersion, checkedAt: new Date().toISOString(), summary: totals, results }, null, 2)}\n`, "utf8");
+      if (!quiet) out(`findings written to ${jsonPath}\n`);
+    }
+
+    // A survey is not a gate: a shop failing its own audit is not this run
+    // failing. Only being unable to check anything at all is.
+    return totals.checked === 0 ? 2 : 0;
+  }
 
   let body: string;
   let url: string;

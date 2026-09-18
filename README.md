@@ -12,7 +12,7 @@ npx ucp-audit yourshop.com
 ```
 
 No runtime dependencies, no API key, no account. TypeScript, Node's own test
-runner, 33 tests.
+runner, 43 tests.
 
 ## Why
 
@@ -111,10 +111,55 @@ Your protocol version against the published spec. Each release has added
 shopping capabilities; the ones added after your version do not exist as far as
 an agent is concerned.
 
+## A list of shops at a time
+
+An agency running twenty client stores needs one command, not twenty:
+
+```console
+$ ucp-audit --batch shops.txt --csv survey.csv
+
+auditing 6 domain(s), 4 at a time
+
+     1/6  allbirds.com                       8 cap(s), 0 blocker(s)
+     2/6  glossier.com                       9 cap(s), 0 blocker(s)
+     3/6  ruggable.com                       no-profile
+     4/6  chewy.com                          3 cap(s), 1 blocker(s), catalogue not searchable
+     5/6  gymshark.com                       8 cap(s), 0 blocker(s)
+     6/6  mejuri.com                         8 cap(s), 0 blocker(s)
+
+6 domain(s)
+
+  profile read and audited   5  (83%)
+  no profile published       1  (17%)
+  refused the check          0
+  answered something else    0
+  no answer                  0
+
+Of the 5 audited:
+  agents cannot search the catalogue   1  (20%)
+  at least one blocker                 1  (20%)
+  behind the published 2026-08-25       1  (20%)
+```
+
+The outcome of each domain is one of six, not a yes or no. **"We could not check
+this shop" and "this shop is broken" are different facts**, and a shop that
+refused the request never appears in the numerator of anything. That is the
+difference between a survey and a number someone made up.
+
+The CSV has one row per domain — outcome, protocol version, capability count,
+whether the catalogue is searchable, blocker count and the first blocker — so it
+opens in a spreadsheet and sorts by the column that matters to you.
+
+Four requests at a time, with a pause, and the concurrency cannot be raised past
+four however it is asked for. This walks up to other people's shops; it does so
+politely or not at all.
+
 ## In CI, or in cron
 
 Exit code is `1` when there is a blocker, `0` when there is not, `2` when there
-is no profile to read.
+is no profile to read. A batch run is a survey rather than a gate: it exits `0`
+even when shops in it are broken, and `2` only if not one domain could be
+checked at all.
 
 ```yaml
 - run: npx ucp-audit yourshop.com
@@ -155,6 +200,8 @@ Node 22+.
 
 | Flag | Meaning |
 | --- | --- |
+| `--batch FILE` | audit a list of domains, one per line; `#` comments and blanks ignored |
+| `--csv FILE` | write the batch result as CSV, one row per domain |
 | `--probe` | also check that every URL the profile declares resolves |
 | `--file PATH` | audit a saved profile instead of fetching one |
 | `--json FILE` | write the findings as JSON |
@@ -179,6 +226,11 @@ Node 22+.
 - **`--probe` checks that a URL answers, not that it answers correctly.** A 200
   from an endpoint says the address is live, not that the implementation behind
   it is right.
+- **A batch result is a census of published profiles, nothing more.** A domain
+  that refused the request, rate-limited it or did not answer is counted as
+  unverified and never as broken. Shops behind a CDN that blocks unknown clients
+  are therefore under-represented among the audited, and any percentage drawn
+  from a batch has to say so.
 - **Not affiliated with Google, Shopify or the UCP project.** This is an
   independent reader of a public specification.
 

@@ -9,6 +9,14 @@ import { checkProfile, countByLevel, worstLevel, type Finding } from "../src/che
 import { isPublicUrl, probeUrls, type Fetcher } from "../src/probe.js";
 import { renderConsole, renderJson } from "../src/report.js";
 import { run } from "../src/cli.js";
+import {
+  auditDomain,
+  auditMany,
+  parseDomainList,
+  summarise as summariseBatch,
+  toCsv,
+  type DomainResult,
+} from "../src/batch.js";
 
 const work = mkdtempSync(join(tmpdir(), "ucp-audit-"));
 after(() => rmSync(work, { recursive: true, force: true }));
@@ -343,5 +351,194 @@ describe("the report", () => {
     assert.equal(report.target, "chewy.com");
     assert.equal(report.summary.blocker, 1);
     assert.ok(Array.isArray(report.capabilities));
+  });
+});
+
+describe("auditing a list of shops", () => {
+  /** Answers each domain from a table, so nothing here reaches the network. */
+  function catalogue(byHost: Record<string, { status: number; body?: unknown; type?: string }>): Fetcher {
+    return {
+      async get(url) {
+        const host = new URL(url).host;
+        const entry = byHost[host];
+        if (!entry) throw new Error(`no fixture for ${host}`);
+        return {
+          status: entry.status,
+          contentType: entry.type ?? "application/json",
+          body: entry.body === undefined ? "" : JSON.stringify(entry.body),
+        };
+      },
+      async head() {
+        return 200;
+      },
+    };
+  }
+
+  it("reads a domain list the way a person writes one", () => {
+    const domains = parseDomainList(
+      "allbirds.com\n" +
+        "# a comment\n" +
+        "\n" +
+        "https://glossier.com/collections/all\n" +
+        "  gymshark.com  \n" +
+        "allbirds.com\n" +
+        "not a host at all\n"
+    );
+    assert.deepEqual(domains, ["allbirds.com", "glossier.com", "gymshark.com"]);
+  });
+
+  it("tells apart the six things that can happen to a domain", async () => {
+    const fetcher = catalogue({
+      "good.example": { status: 200, body: fixture("allbirds") },
+      "none.example": { status: 404 },
+      "rude.example": { status: 403 },
+      "busy.example": { status: 429 },
+      "html.example": { status: 200, body: {}, type: "text/html" },
+      "odd.example": { status: 200, body: { hello: "world" } },
+    });
+
+    const outcomes: Record<string, string> = {};
+    for (const host of ["good", "none", "rude", "busy", "html", "odd"]) {
+      const result = await auditDomain(fetcher, `${host}.example`, "2026-08-25");
+      outcomes[host] = result.outcome;
+    }
+
+    assert.equal(outcomes.good, "checked");
+    assert.equal(outcomes.none, "no-profile");
+    assert.equal(outcomes.rude, "blocked", "403 is the shop refusing us, not the shop being broken");
+    assert.equal(outcomes.busy, "blocked");
+    assert.equal(outcomes.html, "not-json");
+    assert.equal(outcomes.odd, "invalid");
+  });
+
+  it("records whether an agent could find anything to buy", async () => {
+    const fetcher = catalogue({
+      "full.example": { status: 200, body: fixture("allbirds") },
+      "thin.example": { status: 200, body: fixture("chewy") },
+    });
+    const full = await auditDomain(fetcher, "full.example", "2026-08-25");
+    const thin = await auditDomain(fetcher, "thin.example", "2026-08-25");
+
+    assert.equal(full.catalogueSearchable, true);
+    assert.equal(thin.catalogueSearchable, false);
+    assert.equal(thin.blockers, 1);
+    assert.match(thin.topBlocker!, /catalogue cannot be searched/);
+  });
+
+  it("keeps the order of the list however the answers arrive", async () => {
+    const domains = Array.from({ length: 12 }, (_, i) => `shop${i}.example`);
+    const fetcher: Fetcher = {
+      async get(url) {
+        const index = Number(/shop(\d+)/.exec(url)![1]);
+        // Later domains answer sooner, so order cannot come from timing.
+        await new Promise((resolve) => setTimeout(resolve, (12 - index) * 2));
+        return { status: 404, contentType: "application/json", body: "" };
+      },
+      async head() {
+        return 200;
+      },
+    };
+    const results = await auditMany(fetcher, domains, { specVersion: "2026-08-25", delayMs: 0 });
+    assert.deepEqual(results.map((r) => r.domain), domains);
+  });
+
+  it("never runs more than four requests at once", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const fetcher: Fetcher = {
+      async get() {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight -= 1;
+        return { status: 404, contentType: "application/json", body: "" };
+      },
+      async head() {
+        return 200;
+      },
+    };
+    await auditMany(fetcher, Array.from({ length: 20 }, (_, i) => `s${i}.example`), {
+      specVersion: "2026-08-25",
+      concurrency: 99,          // asking for more must not grant it
+      delayMs: 0,
+    });
+    assert.ok(peak <= 4, `peak concurrency was ${peak}`);
+  });
+
+  it("a refused domain never counts as a broken one", () => {
+    const results: DomainResult[] = [
+      { domain: "a", outcome: "checked", catalogueSearchable: false, blockers: 1, protocolVersion: "2026-08-25", findings: [] },
+      { domain: "b", outcome: "blocked", httpStatus: 403 },
+      { domain: "c", outcome: "no-profile", httpStatus: 404 },
+      { domain: "d", outcome: "unreachable" },
+    ];
+    const totals = summariseBatch(results, "2026-08-25");
+    assert.equal(totals.total, 4);
+    assert.equal(totals.checked, 1, "only the audited domain is a denominator");
+    assert.equal(totals.withoutCatalogue, 1);
+    assert.equal(totals.byOutcome.blocked, 1);
+    assert.equal(totals.byOutcome["no-profile"], 1);
+    assert.equal(totals.byOutcome.unreachable, 1);
+  });
+
+  it("counts how far behind the published version the audited shops are", () => {
+    const results: DomainResult[] = [
+      { domain: "a", outcome: "checked", protocolVersion: "2026-01-23", findings: [], blockers: 0 },
+      { domain: "b", outcome: "checked", protocolVersion: "2026-08-25", findings: [], blockers: 0 },
+    ];
+    const totals = summariseBatch(results, "2026-08-25");
+    assert.equal(totals.behindSpec, 1);
+    assert.deepEqual(totals.versions, { "2026-01-23": 1, "2026-08-25": 1 });
+  });
+
+  it("writes CSV a spreadsheet can open, commas and all", () => {
+    const csv = toCsv([
+      {
+        domain: "thin.example",
+        outcome: "checked",
+        httpStatus: 200,
+        protocolVersion: "2026-01-23",
+        capabilities: ["a", "b", "c"],
+        catalogueSearchable: false,
+        blockers: 1,
+        topBlocker: 'Checkout is offered, but the catalogue cannot be searched',
+      },
+      { domain: "none.example", outcome: "no-profile", httpStatus: 404 },
+    ]);
+    const rows = csv.trimEnd().split("\n");
+    assert.equal(rows[0], "domain,outcome,http_status,protocol_version,capabilities,catalogue_searchable,blockers,top_blocker");
+    assert.match(rows[1]!, /^thin\.example,checked,200,2026-01-23,3,no,1,"Checkout is offered, but/);
+    assert.equal(rows[2], "none.example,no-profile,404,,,,,");
+  });
+
+  it("the whole batch run writes its CSV and does not fail on a broken shop", async () => {
+    const list = join(work, "shops.txt");
+    const csv = join(work, "survey.csv");
+    writeFileSync(list, "good.example\nthin.example\nnone.example\n", "utf8");
+
+    const fetcher = catalogue({
+      "good.example": { status: 200, body: fixture("allbirds") },
+      "thin.example": { status: 200, body: fixture("chewy") },
+      "none.example": { status: 404 },
+    });
+
+    let printed = "";
+    const code = await run(["--batch", list, "--csv", csv], fetcher, (text) => {
+      printed += text;
+    });
+
+    assert.equal(code, 0, "a survey is not a gate: a broken shop is not a failed run");
+    assert.match(printed, /3 domain\(s\)/);
+    assert.match(printed, /agents cannot search the catalogue\s+1/);
+    const written = readFileSync(csv, "utf8");
+    assert.equal(written.trimEnd().split("\n").length, 4, "header plus three rows");
+  });
+
+  it("exits 2 when not one domain could be checked", async () => {
+    const list = join(work, "all-dead.txt");
+    writeFileSync(list, "rude.example\nbusy.example\n", "utf8");
+    const fetcher = catalogue({ "rude.example": { status: 403 }, "busy.example": { status: 429 } });
+    const code = await run(["--batch", list, "--quiet"], fetcher, () => {});
+    assert.equal(code, 2, "a run that verified nothing must not look like a clean run");
   });
 });
