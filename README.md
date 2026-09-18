@@ -209,6 +209,46 @@ Node 22+.
 | `--timeout MS` | per request, default 15000 |
 | `--quiet` | write the files, print nothing |
 
+## What 5,356 live shops actually publish
+
+Run on 2026-09-18 against every domain in the Tranco top 300,000 whose DNS
+points at Shopify's storefront address - 5,356 live storefronts, one request
+each.
+
+| | shops | |
+|---|---|---|
+| Profile read and audited | 5,299 | 98.9% |
+| No profile published | 11 | 0.2% |
+| Could not be checked (refused, no answer, not a profile) | 46 | 0.9% |
+
+Of the 5,299 audited: **none** is behind the published `2026-08-25` release,
+**none** has a blocker, and **none** hides its catalogue from search. Adoption
+is not the interesting number here - Shopify turned the protocol on for its
+merchants, so it is near total and uniform.
+
+The one thing shops differ on is a single capability:
+
+| capability | shops | |
+|---|---|---|
+| `dev.ucp.common.identity_linking` | 2,784 | 52.5% |
+| the other eight | 5,299 | 100% |
+
+Without identity linking an agent can browse and buy, but only as a guest: no
+saved address, no order history, no loyalty tier. **47.5% of these shops turn a
+returning customer into an anonymous visitor** the moment an agent does the
+shopping.
+
+The domain list, the collection script and the raw per-domain results are in
+[`survey/`](survey/), so the measurement can be repeated rather than believed:
+
+```console
+$ node survey/collect.mjs --scan 300000      # DNS only, never touches a shop
+$ ucp-audit --batch survey/domains.txt --csv results.csv
+```
+
+The full write-up, with the method and what it does not say, is at
+[dkautomation23.github.io/ucp-survey.html](https://dkautomation23.github.io/ucp-survey.html).
+
 ## Honest limits
 
 - **It reads the profile, not your shop.** Whether your inventory is accurate,

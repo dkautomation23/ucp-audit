@@ -1,0 +1,48 @@
+{
+  "specVersion": "2026-08-25",
+  "checkedAt": "2026-09-18T12:03:58.131Z",
+  "population": {
+    "source": "Tranco top 300000, DNS pointing at Shopify (23.227.38.0/24 or *.myshopify.com)",
+    "script": "survey/collect.mjs",
+    "list": "survey/domains.txt"
+  },
+  "method": {
+    "request": "one HTTPS GET of /.well-known/ucp per domain",
+    "concurrency": 4,
+    "note": "Domains that refused, timed out or answered something else are counted separately and never as broken."
+  },
+  "summary": {
+    "total": 5356,
+    "byOutcome": {
+      "checked": 5299,
+      "no-profile": 11,
+      "blocked": 13,
+      "not-json": 0,
+      "invalid": 1,
+      "unreachable": 32
+    },
+    "checked": 5299,
+    "withoutCatalogue": 0,
+    "withBlockers": 0,
+    "versions": {
+      "2026-08-25": 5299
+    },
+    "behindSpec": 0,
+    "blockerCounts": {}
+  },
+  "capabilities": {
+    "dev.shopify.catalog": 5299,
+    "dev.ucp.shopping.cart": 5299,
+    "dev.ucp.shopping.catalog.lookup": 5299,
+    "dev.ucp.shopping.catalog.search": 5299,
+    "dev.ucp.shopping.checkout": 5299,
+    "dev.ucp.shopping.discount": 5299,
+    "dev.ucp.shopping.fulfillment": 5299,
+    "dev.ucp.shopping.order": 5299,
+    "dev.ucp.common.identity_linking": 2784
+  },
+  "capabilityCountHistogram": {
+    "8": 2515,
+    "9": 2784
+  }
+}
