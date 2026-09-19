@@ -1,0 +1,32 @@
+{
+  "kind": "census",
+  "checkedAt": "2026-09-18T15:10:18.793Z",
+  "population": {
+    "source": "Tranco top 2000 sites, as they are - no commerce classifier",
+    "list": "survey/domains-top2k.txt",
+    "note": "Publishing /.well-known/ucp is itself the signal; a site that does not publish one needs no classification."
+  },
+  "method": {
+    "request": "one HTTPS GET of /.well-known/ucp per domain",
+    "concurrency": 4,
+    "timeouts": "2.5s on the first pass; every domain that timed out was asked again with 6s"
+  },
+  "summary": {
+    "total": 2000,
+    "checked": 1,
+    "unverified": 1060,
+    "byOutcome": {
+      "no-profile": 939,
+      "unreachable": 599,
+      "not-json": 211,
+      "blocked": 247,
+      "invalid": 3,
+      "checked": 1
+    },
+    "versions": {
+      "2026-08-25": 1
+    }
+  },
+  "finding": "The one domain that publishes a profile serves it from wyzecom.myshopify.com - a Shopify storefront. Outside that one platform the protocol is not present at the top of the web.",
+  "retried": 668
+}

@@ -162,25 +162,43 @@ function csvCell(value: unknown): string {
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-export function toCsv(results: DomainResult[]): string {
-  const rows = [CSV_COLUMNS.join(",")];
-  for (const result of results) {
-    rows.push(
-      [
-        result.domain,
-        result.outcome,
-        result.httpStatus ?? "",
-        result.protocolVersion ?? "",
-        result.capabilities?.length ?? "",
-        result.outcome === "checked" ? (result.catalogueSearchable ? "yes" : "no") : "",
-        result.blockers ?? "",
-        result.topBlocker ?? "",
-      ]
-        .map(csvCell)
-        .join(","),
-    );
+/** The header a resumed run recognises, and the one `toCsv` writes. */
+export const CSV_HEADER = CSV_COLUMNS.join(",");
+
+/** One CSV row for one domain, so a long run can write as it goes. */
+export function toCsvRow(result: DomainResult): string {
+  return [
+    result.domain,
+    result.outcome,
+    result.httpStatus ?? "",
+    result.protocolVersion ?? "",
+    result.capabilities?.length ?? "",
+    result.outcome === "checked" ? (result.catalogueSearchable ? "yes" : "no") : "",
+    result.blockers ?? "",
+    result.topBlocker ?? "",
+  ]
+    .map(csvCell)
+    .join(",");
+}
+
+/**
+ * Domains a half-finished CSV already holds.
+ *
+ * A survey of five thousand shops takes an hour of polite crawling. Starting it
+ * over because a laptop slept costs that hour twice - once for us and once for
+ * every shop asked again.
+ */
+export function domainsIn(csv: string): Set<string> {
+  const done = new Set<string>();
+  for (const line of csv.split(/\r?\n/).slice(1)) {
+    const domain = line.split(",")[0]?.trim();
+    if (domain) done.add(domain.toLowerCase());
   }
-  return `${rows.join("\n")}\n`;
+  return done;
+}
+
+export function toCsv(results: DomainResult[]): string {
+  return `${[CSV_HEADER, ...results.map(toCsvRow)].join("\n")}\n`;
 }
 
 export interface Summary {

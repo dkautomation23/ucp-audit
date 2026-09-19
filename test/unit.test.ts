@@ -8,7 +8,9 @@ import { compareVersions, parseProfile, profileUrl, urlsIn, type Profile } from 
 import { checkProfile, countByLevel, worstLevel, type Finding } from "../src/checks.js";
 import { isPublicUrl, probeUrls, type Fetcher } from "../src/probe.js";
 import { renderConsole, renderJson } from "../src/report.js";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { run } from "../src/cli.js";
+import { httpFetcher } from "../src/probe.js";
 import { currentSpecVersion, KNOWN_SPEC_VERSION, VERSIONS_URL } from "../src/spec.js";
 import {
   auditDomain,
@@ -16,6 +18,9 @@ import {
   parseDomainList,
   summarise as summariseBatch,
   toCsv,
+  toCsvRow,
+  domainsIn,
+  CSV_HEADER,
   type DomainResult,
 } from "../src/batch.js";
 
@@ -650,5 +655,126 @@ describe("the first thing a stranger types", () => {
   it("exits 2 when nothing at all was named", async () => {
     const code = await run([], undefined, silent);
     assert.equal(code, 2, "an empty invocation is a usage error, not help");
+  });
+});
+
+
+describe("the fetcher a stranger controls", () => {
+  /** Starts a server on loopback and returns its origin. */
+  type Handler = (request: IncomingMessage, response: ServerResponse) => void;
+
+  async function serve(handler: Handler): Promise<{ origin: string; close: () => Promise<void> }> {
+    const server = createServer(handler);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as { port: number };
+    return {
+      origin: `http://127.0.0.1:${port}`,
+      close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    };
+  }
+
+  it("does not follow a redirect into the private network", async () => {
+    // A shop's own address is public, so the guard passes before the request.
+    // What it answers with is not: this is how a request-forgery gets through a
+    // checker that only validates the URL it was given.
+    const metadata = await serve((_, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ secret: "cloud metadata" }));
+    });
+    const shop = await serve((_, response) => {
+      response.writeHead(302, { location: `${metadata.origin}/latest/meta-data/` });
+      response.end();
+    });
+
+    try {
+      const fetcher = httpFetcher(5000);
+      await assert.rejects(
+        () => fetcher.get(`${shop.origin}/.well-known/ucp`),
+        /private|refus/i,
+        "a redirect into 127.0.0.1 must be refused, not followed",
+      );
+    } finally {
+      await shop.close();
+      await metadata.close();
+    }
+  });
+
+  it("stops reading a body that is not a profile instead of buffering it", async () => {
+    // 5 MB is the documented cap. A server that keeps talking must cost us the
+    // cap, not its whole reply, or the check is decoration.
+    let sent = 0;
+    const chunk = "x".repeat(64 * 1024);
+    const flood = await serve((_, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      const push = () => {
+        if (!response.writableEnded && sent < 64 * 1024 * 1024) {
+          sent += chunk.length;
+          if (response.write(chunk)) setImmediate(push);
+          else response.once("drain", push);
+        }
+      };
+      push();
+    });
+
+    try {
+      const fetcher = httpFetcher(5000);
+      await assert.rejects(() => fetcher.get(`${flood.origin}/.well-known/ucp`), /bytes|profile/i);
+      assert.ok(
+        sent < 12 * 1024 * 1024,
+        `read ${Math.round(sent / 1024 / 1024)} MB before giving up; the cap is 5 MB`,
+      );
+    } finally {
+      await flood.close();
+    }
+  });
+
+  it("gives up rather than following a redirect chain forever", async () => {
+    let hops = 0;
+    const loop = await serve((_, response) => {
+      hops += 1;
+      response.writeHead(302, { location: `/again/${hops}` });
+      response.end();
+    });
+
+    try {
+      const fetcher = httpFetcher(5000);
+      await assert.rejects(() => fetcher.get(`${loop.origin}/.well-known/ucp`), /redirect/i);
+      assert.ok(hops <= 6, `followed ${hops} redirects`);
+    } finally {
+      await loop.close();
+    }
+  });
+});
+
+
+describe("picking up where a survey stopped", () => {
+  it("writes a row with exactly the cells the header promises", () => {
+    const row = toCsvRow({
+      domain: "a.example",
+      outcome: "checked",
+      httpStatus: 200,
+      protocolVersion: "2026-08-25",
+      capabilities: ["one", "two"],
+      catalogueSearchable: true,
+      blockers: 0,
+      findings: [],
+    });
+    assert.equal(row.split(",").length, CSV_HEADER.split(",").length);
+  });
+
+  it("knows which domains a half-finished file already holds", () => {
+    const csv =
+      `${CSV_HEADER}\n` +
+      "a.example,checked,200,2026-08-25,8,yes,0,\n" +
+      "B.EXAMPLE,blocked,403,,,,,\n";
+    const done = domainsIn(csv);
+    assert.ok(done.has("a.example"));
+    assert.ok(done.has("b.example"), "a domain is a domain whatever its case");
+    assert.equal(done.size, 2, "the header is not a domain");
+  });
+
+  it("an empty file means nothing was done, not that everything was", () => {
+    assert.equal(domainsIn("").size, 0);
+    assert.equal(domainsIn(`${CSV_HEADER}\n`).size, 0);
   });
 });

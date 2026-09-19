@@ -2,13 +2,22 @@
  * ucp-audit - is your shop actually reachable by shopping agents?
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 
 import { checkProfile, countByLevel, type Finding } from "./checks.js";
 import { parseProfile, profileUrl, urlsIn, type Profile } from "./profile.js";
 import { fetchProfile, httpFetcher, probeUrls, type Fetcher, type UrlResult } from "./probe.js";
 import { renderConsole, renderJson, type Context } from "./report.js";
-import { auditMany, parseDomainList, renderSummary, summarise, toCsv } from "./batch.js";
+import {
+  auditMany,
+  CSV_HEADER,
+  domainsIn,
+  parseDomainList,
+  renderSummary,
+  summarise,
+  toCsvRow,
+  type DomainResult,
+} from "./batch.js";
 import { currentSpecVersion, KNOWN_SPEC_VERSION } from "./spec.js";
 
 export { KNOWN_SPEC_VERSION };
@@ -79,6 +88,32 @@ function parse(argv: string[]): Args {
   return { target, flags, bools };
 }
 
+/** Reads back the rows a previous run appended, enough to summarise them. */
+function parseCsvResults(csv: string): DomainResult[] {
+  const results: DomainResult[] = [];
+  for (const line of csv.split(/\r?\n/).slice(1)) {
+    if (!line.trim()) continue;
+    const [domain, outcome, status, version, capabilities, searchable, blockers] = line.split(",");
+    if (!domain || !outcome) continue;
+    if (outcome !== "checked") {
+      results.push({ domain, outcome: outcome as DomainResult["outcome"], httpStatus: status ? Number(status) : undefined });
+      continue;
+    }
+    results.push({
+      domain,
+      outcome: "checked",
+      httpStatus: status ? Number(status) : undefined,
+      protocolVersion: version || undefined,
+      // Only the count survives a CSV round trip; the names are in the JSON.
+      capabilities: new Array(Number(capabilities || 0)).fill(""),
+      catalogueSearchable: searchable === "yes",
+      findings: [],
+      blockers: Number(blockers || 0),
+    });
+  }
+  return results;
+}
+
 export async function run(
   argv: string[],
   fetcher?: Fetcher,
@@ -121,13 +156,32 @@ export async function run(
       return 2;
     }
 
+    // Rows land as they arrive, and a run that finds its CSV already there
+    // picks up where the last one stopped: a survey of thousands of shops is
+    // an hour of polite crawling, and starting over costs that hour twice.
+    const csvPath = args.flags.get("csv");
+    let alreadyDone: DomainResult[] = [];
+    let pending = domains;
+    if (csvPath && existsSync(csvPath)) {
+      const existing = readFileSync(csvPath, "utf8");
+      const done = domainsIn(existing);
+      pending = domains.filter((domain) => !done.has(domain));
+      alreadyDone = parseCsvResults(existing);
+      if (!quiet && pending.length < domains.length) {
+        out(`resuming: ${domains.length - pending.length} domain(s) already in ${csvPath}\n`);
+      }
+    } else if (csvPath) {
+      writeFileSync(csvPath, `${CSV_HEADER}\n`, "utf8");
+    }
+
     if (!quiet) {
-      out(`auditing ${domains.length} domain(s), 4 at a time`);
+      out(`auditing ${pending.length} domain(s), 4 at a time`);
       out(spec.source === "network" ? ` against ${specVersion}, read from ucp.dev\n\n` : ` against ${specVersion}\n\n`);
     }
-    const results = await auditMany(http, domains, {
+    const fresh = await auditMany(http, pending, {
       specVersion,
       onResult: (result, done, total) => {
+        if (csvPath) appendFileSync(csvPath, `${toCsvRow(result)}\n`, "utf8");
         if (quiet) return;
         const detail =
           result.outcome === "checked"
@@ -137,14 +191,10 @@ export async function run(
       },
     });
 
+    const results = [...alreadyDone, ...fresh];
     const totals = summarise(results, specVersion);
     if (!quiet) out(`\n${renderSummary(totals, specVersion)}\n`);
-
-    const csvPath = args.flags.get("csv");
-    if (csvPath) {
-      writeFileSync(csvPath, toCsv(results), "utf8");
-      if (!quiet) out(`\nrows written to ${csvPath}\n`);
-    }
+    if (csvPath && !quiet) out(`\n${results.length} row(s) in ${csvPath}\n`);
     const jsonPath = args.flags.get("json");
     if (jsonPath) {
       writeFileSync(jsonPath, `${JSON.stringify({ specVersion, checkedAt: new Date().toISOString(), summary: totals, results }, null, 2)}\n`, "utf8");
