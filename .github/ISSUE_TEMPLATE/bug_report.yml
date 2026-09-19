@@ -1,0 +1,81 @@
+name: Bug report
+description: Something in ucp-audit doesn't work as documented.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is for the `ucp-audit` CLI itself — not for a shop's UCP
+        profile being reported as broken. If ucp-audit correctly found a
+        problem with a shop's profile, that's the tool working.
+
+  - type: input
+    id: version
+    attributes:
+      label: ucp-audit version
+      description: >
+        From `npm ls -g ucp-audit`, `npm ls ucp-audit`, or the version you
+        ran with npx.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      description: Output of `node -v`. CI tests 22.x and 24.x.
+      placeholder: "v22.11.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Exact command
+      description: The full command you ran. Redact the domain if you can't share it.
+      render: shell
+      placeholder: |
+        ucp-audit yourshop.com --probe --json report.json
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Full console output or error message, if you can share it.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: profile
+    attributes:
+      label: The UCP profile involved
+      description: >
+        If you can share it: the output of
+        `curl https://yourshop.com/.well-known/ucp`, or the file you passed
+        with --file. Skip this if the shop isn't yours to share.
+    validations:
+      required: false
