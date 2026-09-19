@@ -3,6 +3,7 @@
 [![CI](https://github.com/dkautomation23/ucp-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/dkautomation23/ucp-audit/actions/workflows/ci.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/dkautomation23/ucp-audit/badge)](https://scorecard.dev/viewer/?uri=github.com/dkautomation23/ucp-audit)
 [![CodeQL](https://github.com/dkautomation23/ucp-audit/actions/workflows/codeql.yml/badge.svg)](https://github.com/dkautomation23/ucp-audit/actions/workflows/codeql.yml)
+[![npm](https://img.shields.io/npm/v/ucp-audit)](https://www.npmjs.com/package/ucp-audit)
 
 <img src="docs/demo.svg" alt="ucp-audit reporting on a live shop that agents cannot browse" width="100%">
 
@@ -15,6 +16,14 @@ npx ucp-audit yourshop.com
 
 No runtime dependencies, no API key, no account. TypeScript, Node's own test
 runner, 59 tests.
+
+Every published version is built and published by the workflow in this
+repository, never from a laptop, and carries a provenance statement recorded in
+Sigstore's public transparency log. Anyone can check that before trusting it:
+
+```bash
+npm audit signatures
+```
 
 ## Why
 
