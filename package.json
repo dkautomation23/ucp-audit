@@ -1,6 +1,6 @@
 {
   "name": "ucp-audit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Checks whether a shop is actually reachable by AI shopping agents: reads the Universal Commerce Protocol profile at /.well-known/ucp and reports what would make an agent skip it.",
   "keywords": [
     "ucp",
