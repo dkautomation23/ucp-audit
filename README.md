@@ -13,10 +13,6 @@ you what would make one skip it.
 npx ucp-audit yourshop.com
 ```
 
-<sup>Not on npm yet — the `npx` form works from the first published
-release. Until then: `git clone`, `npm ci && npm run build`, then
-`node dist/src/main.js`.</sup>
-
 No runtime dependencies, no API key, no account. TypeScript, Node's own test
 runner, 59 tests.
 
