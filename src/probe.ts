@@ -44,46 +44,122 @@ export function isPublicUrl(raw: string): boolean {
 /** 5 MB. A profile is a few kilobytes; anything larger is not a profile. */
 export const MAX_PROFILE_BYTES = 5 * 1024 * 1024;
 
+/** How many hops a shop may send us on before we stop. */
+const MAX_REDIRECTS = 5;
+
+const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
+
+/**
+ * Follows redirects ourselves, checking every hop.
+ *
+ * `redirect: "follow"` hands the decision to whoever answers: a shop's own
+ * address passes the public-address check, and its 302 to `http://127.0.0.1` or
+ * to a cloud metadata service is then followed without anyone asking. Checking
+ * the URL we were given and letting the answer take us anywhere is not a check.
+ *
+ * The first URL is the operator's choice and is not second-guessed here; every
+ * address a stranger sends us to afterwards is.
+ */
+async function followed(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  let current = url;
+
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+    const response = await fetch(current, {
+      ...init,
+      redirect: "manual",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+
+    if (!REDIRECT_STATUS.has(response.status)) return response;
+
+    const location = response.headers.get("location");
+    if (!location) return response;
+
+    const next = new URL(location, current).toString();
+    if (!isPublicUrl(next)) {
+      throw new Error(
+        `${current} redirects to ${next}, which is not a public address; refusing to follow it`,
+      );
+    }
+    current = next;
+  }
+
+  throw new Error(`${url} sent more than ${MAX_REDIRECTS} redirects; giving up`);
+}
+
+/**
+ * Reads at most `limit` bytes and stops.
+ *
+ * `response.text()` reads whatever is sent before anyone can object, so a size
+ * check that runs afterwards protects nothing: the memory is already spent.
+ */
+async function readCapped(response: Response, limit: number, url: string): Promise<string> {
+  const body = response.body;
+  if (!body) return "";
+
+  const decoder = new TextDecoder();
+  const reader = body.getReader();
+  let text = "";
+  let bytes = 0;
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > limit) {
+        await reader.cancel();
+        throw new Error(`${url} returned more than ${limit} bytes; that is not a profile`);
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return text + decoder.decode();
+}
+
 export function httpFetcher(timeoutMs: number): Fetcher {
   return {
     async get(url) {
-      const response = await fetch(url, {
-        headers: { accept: "application/json", "user-agent": USER_AGENT },
-        redirect: "follow",
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      const body = await response.text();
-      if (Buffer.byteLength(body, "utf8") > MAX_PROFILE_BYTES) {
-        throw new Error(`${url} returned more than ${MAX_PROFILE_BYTES} bytes; that is not a profile`);
-      }
+      const response = await followed(
+        url,
+        { headers: { accept: "application/json", "user-agent": USER_AGENT } },
+        timeoutMs,
+      );
       return {
         status: response.status,
         contentType: response.headers.get("content-type") ?? "",
-        body,
+        body: await readCapped(response, MAX_PROFILE_BYTES, url),
       };
     },
     async head(url) {
       try {
-        const response = await fetch(url, {
-          method: "HEAD",
-          headers: { "user-agent": USER_AGENT },
-          redirect: "follow",
-          signal: AbortSignal.timeout(timeoutMs),
-        });
+        const response = await followed(
+          url,
+          { method: "HEAD", headers: { "user-agent": USER_AGENT } },
+          timeoutMs,
+        );
         // Many servers answer 405 to HEAD while serving GET perfectly well, so
         // that is not evidence of a missing endpoint.
         if (response.status === 405 || response.status === 501) {
-          const fallback = await fetch(url, {
-            method: "GET",
-            headers: { "user-agent": USER_AGENT },
-            redirect: "follow",
-            signal: AbortSignal.timeout(timeoutMs),
-          });
+          const fallback = await followed(
+            url,
+            { method: "GET", headers: { "user-agent": USER_AGENT } },
+            timeoutMs,
+          );
+          await fallback.body?.cancel();
           return fallback.status;
         }
+        await response.body?.cancel();
         return response.status;
       } catch {
-        return 0; // unreachable
+        return 0; // unreachable, or a redirect we refused to follow
       }
     },
   };

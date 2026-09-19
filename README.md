@@ -1,6 +1,8 @@
 # ucp-audit
 
 [![CI](https://github.com/dkautomation23/ucp-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/dkautomation23/ucp-audit/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/dkautomation23/ucp-audit/badge)](https://scorecard.dev/viewer/?uri=github.com/dkautomation23/ucp-audit)
+[![CodeQL](https://github.com/dkautomation23/ucp-audit/actions/workflows/codeql.yml/badge.svg)](https://github.com/dkautomation23/ucp-audit/actions/workflows/codeql.yml)
 
 <img src="docs/demo.svg" alt="ucp-audit reporting on a live shop that agents cannot browse" width="100%">
 
@@ -11,8 +13,12 @@ you what would make one skip it.
 npx ucp-audit yourshop.com
 ```
 
+<sup>Not on npm yet — the `npx` form works from the first published
+release. Until then: `git clone`, `npm ci && npm run build`, then
+`node dist/src/main.js`.</sup>
+
 No runtime dependencies, no API key, no account. TypeScript, Node's own test
-runner, 53 tests.
+runner, 59 tests.
 
 ## Why
 
@@ -154,6 +160,11 @@ Four requests at a time, with a pause, and the concurrency cannot be raised past
 four however it is asked for. This walks up to other people's shops; it does so
 politely or not at all.
 
+Rows are written as they land, and a run that finds its `--csv` already there
+picks up where the last one stopped. A five-thousand-shop survey is an hour of
+polite crawling; starting it over because a laptop slept would cost that hour
+twice — once here, and once for every shop asked again.
+
 ## In CI, or in cron
 
 Exit code is `1` when there is a blocker, `0` when there is not, `2` when there
@@ -238,6 +249,34 @@ Without identity linking an agent can browse and buy, but only as a guest: no
 saved address, no order history, no loyalty tier. **47.5% of these shops turn a
 returning customer into an anonymous visitor** the moment an agent does the
 shopping.
+
+### And outside Shopify: one site in two thousand
+
+The measurement above covers one platform, which was its honest limit. So the
+same question went to the web at large on the same day: of the **2,000 most
+visited sites in the world**, how many publish a UCP profile at all? No commerce
+classifier is involved — publishing one is itself the signal, and every retailer
+large enough to matter to a shopping agent is inside that range.
+
+| of the 1,154 that answered | sites | |
+|---|---|---|
+| Published a profile | **1** | 0.1% |
+| Answered, no profile | 939 | 81.4% |
+| Answered with something that is not a profile | 214 | 18.5% |
+
+And the one that does — `wyzecam.com` — serves it from `wyzecom.myshopify.com`.
+It is a Shopify storefront. **At the top of the web, the protocol exists in
+exactly one place, and that place is Shopify.**
+
+846 of the 2,000 did not answer or refused. Every domain that timed out on the
+first pass (2.5 seconds) was asked again with a longer limit, and 668 answered
+then; what still did not answer is counted apart and never as "no profile". The
+list of most visited domains is also full of content-delivery and API hostnames
+that serve nothing at their root.
+
+Together the two runs say what neither says alone: **inside Shopify the protocol
+is universal; outside it, at the top of the web, it is a rounding error.** An
+agent's shopping world today is the shops one company switched on.
 
 The domain list, the collection script and the raw per-domain results are in
 [`survey/`](survey/), so the measurement can be repeated rather than believed:
