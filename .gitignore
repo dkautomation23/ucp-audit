@@ -1,2 +1,8 @@
 node_modules/
 dist/
+# libFuzzer writes what it grows into the first corpus directory it is given.
+# The five hand-written seeds live in fuzz/seeds/; this is its scratch space.
+crash-*
+leak-*
+timeout-*
+fuzz/corpus/

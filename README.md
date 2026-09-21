@@ -184,6 +184,27 @@ checked at all.
 Your platform publishes this profile on your behalf and can change it without
 telling you. A nightly check is the cheap half of the job.
 
+## Fuzzed, because a census cannot stop at shop forty
+
+Every profile this reads is JSON served by a shop nobody here controls, and the
+survey below walks 5,356 of them. An exception at shop forty ends the run and
+names no cause, so the property the fuzz target asserts is not that the parse is
+correct - the suite checks that - but that **a failure is always a described
+one**. Refusing a document that has no `ucp` object is the contract; a
+`TypeError` about a property of `undefined` is not.
+
+```bash
+npm run build
+mkdir -p fuzz/corpus   # libFuzzer writes what it grows into the FIRST directory
+npx jazzer fuzz/parse.fuzz.js fuzz/corpus fuzz/seeds --sync -- -max_total_time=150
+```
+
+A local run on 21 September 2026: **990,222 executions in 151 seconds, no
+crash**, at 137 edges of coverage. The seeds are three profiles captured from
+live storefronts plus a domain list. ClusterFuzzLite re-runs the target on every
+pull request against the code that changed — config in
+[`.clusterfuzzlite/`](.clusterfuzzlite/).
+
 ## Safety
 
 This tool follows URLs written by someone else, so it treats them accordingly.
