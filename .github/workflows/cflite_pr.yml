@@ -14,10 +14,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # JavaScript supports only `none`: OSS-Fuzz says ASan and UBSan are
-        # not available for this language, and `none` is its default.
-        # https://google.github.io/oss-fuzz/getting-started/new-project-guide/javascript-lang/
-        sanitizer: [none]
+        # `address`, and not because JavaScript needs AddressSanitizer - it
+        # does not, OSS-Fuzz says so plainly. The ClusterFuzzLite action
+        # validates this value against ['address', 'memory', 'undefined',
+        # 'coverage'] and rejects `none` outright:
+        #   ERROR - Invalid SANITIZER: none.
+        # Its own default is `address`, so that is what a JavaScript project
+        # gets whether it says so or not. The docs and the runner disagree
+        # here; the runner is the one that decides.
+        sanitizer: [address]
     steps:
       - name: Build the fuzzer
         id: build
