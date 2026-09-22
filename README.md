@@ -201,9 +201,11 @@ npx jazzer fuzz/parse.fuzz.js fuzz/corpus fuzz/seeds --sync -- -max_total_time=1
 
 A local run on 21 September 2026: **990,222 executions in 151 seconds, no
 crash**, at 137 edges of coverage. The seeds are three profiles captured from
-live storefronts plus a domain list. ClusterFuzzLite re-runs the target on every
-pull request against the code that changed — config in
-[`.clusterfuzzlite/`](.clusterfuzzlite/).
+live storefronts plus a domain list. It runs for sixty seconds in CI on every
+push, in the ordinary test workflow. Not through ClusterFuzzLite: it supports
+c, c++, go, rust, python, jvm and swift, and this is JavaScript. Two commits
+went into arguing with its sanitizer setting before anyone checked whether the
+language was on the list.
 
 ## Safety
 
