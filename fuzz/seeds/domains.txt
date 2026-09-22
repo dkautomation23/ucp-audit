@@ -3,3 +3,4 @@ shop.example
 # comment
 
 other.example
+
